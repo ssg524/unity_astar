@@ -28,13 +28,16 @@ class Node
 
 public class AstarController : MonoBehaviour
 {
-    private Vector3Int destinationPos;
+    private Vector3 destinationPos;
     private Vector3 startPos;
+
+    private float tileOffset = 0.5f;
 
     private GameObject player;
 
     [SerializeField] private TileBase wallTile;
-    [SerializeField] private TileBase walkTile;
+    [SerializeField] private TileBase historyTile;
+    [SerializeField] private TileBase goalTile;
     [SerializeField] private Tilemap tilemap;
     
 
@@ -51,7 +54,7 @@ public class AstarController : MonoBehaviour
     public void onClick()
     {
         Start();
-        Astar(new Vector3(startPos.x + 0.5f, startPos.y + 0.5f, 0), destinationPos);
+        Astar(startPos, destinationPos);
     }
     
     float getDistanceFormula(Vector3 xy1, Vector3 xy2)
@@ -65,7 +68,7 @@ public class AstarController : MonoBehaviour
         return (float)Math.Sqrt(Math.Pow(x2-x1, 2) + Math.Pow(y2-y1, 2));
     } // 두 점 사이의 거리 구하는 함수
     
-    Node find(List<Node> list, Vector3 p)
+    Node isPosInNode(List<Node> list, Vector3 p)
     {
         foreach (Node lt in list)
         {
@@ -78,11 +81,16 @@ public class AstarController : MonoBehaviour
     
     void makePath(List<Node> closeList)
     {
-        Debug.Log("Make start");
+        Debug.Log("path make start");
         
         List<Vector3> path = new List<Vector3>();
-        closeList.Reverse();
-        Node node = closeList[0];
+        Node node = closeList[closeList.Count - 1];
+
+        if (node.pos.x != destinationPos.x && node.pos.y != destinationPos.y)
+        {
+            Debug.Log("갈 수 없는 목적지입니다.");
+            return;
+        }
     
         while (node != null)
         {
@@ -93,8 +101,7 @@ public class AstarController : MonoBehaviour
         path.Reverse();
         foreach (Vector3 pos in path)
         {
-            Debug.Log(pos.x + ", " + pos.y);
-            tilemap.SetTile(new Vector3Int((int)(pos.x - 0.5f), (int)(pos.y - 0.5f), 0), walkTile);
+            tilemap.SetTile(new Vector3Int((int)(pos.x - tileOffset), (int)(pos.y - tileOffset), 0), historyTile);
             player.transform.Translate(pos - player.transform.position);
         }
     } // 도착지에 도착 후, 어떤 경로로 도착했는지 부모 노드를 쫓아간다.
@@ -129,7 +136,7 @@ public class AstarController : MonoBehaviour
             int index = 0, minIndex = 0;
             foreach (Node list in openList)
             {
-                if (list.f < smallF)
+                if (list.f <= smallF)
                 {
                     smallNode = list;
                     smallF = list.f;
@@ -140,10 +147,12 @@ public class AstarController : MonoBehaviour
             }
 
             current = smallNode;
+            //tilemap.SetTile(new Vector3Int((int)(current.pos.x - tileOffset), (int)(current.pos.y - tileOffset), 0), historyTile);
+            //Debug.Log("(" + current.pos.x + ", " + current.pos.y + "), f=" + current.f);
             openList.RemoveAt(minIndex);
             closeList.Add(current);
             
-            if (current.pos.x == endPos.x + 0.5f && current.pos.y == endPos.y + 0.5f) // 만약 현재 그리드 좌표가 도착지 좌표라면 종료
+            if (current.pos.x == endPos.x && current.pos.y == endPos.y) // 만약 현재 그리드 좌표가 도착지 좌표라면 종료
                 break;
 
             foreach (List<int> dir in wasd)
@@ -154,24 +163,31 @@ public class AstarController : MonoBehaviour
                 if ((nextPosition.x >= -5.5f && nextPosition.x <= 5.5f) &&
                     (nextPosition.y >= -3.5f && nextPosition.y <= 3.5f))
                 {
-                    if (tilemap.GetTile(new Vector3Int((int)(nextPosition.x - 0.5f), (int)(nextPosition.y - 0.5f), 0)) != wallTile) {
+                    if (tilemap.GetTile(new Vector3Int((int)(nextPosition.x - tileOffset), (int)(nextPosition.y - tileOffset), 0)) != wallTile) {
                         Node nextNode = new Node(current, null, nextPosition);
                         current.nextNode = nextNode;
+                        
+                        if (tilemap.GetTile(new Vector3Int((int)(nextPosition.x - tileOffset),
+                                (int)(nextPosition.y - tileOffset), 0)) == goalTile)
+                        {
+                            nextNode.f = nextNode.g = nextNode.h = 0;
+                            openList.Add(nextNode);
+                            break;
+                        }
 
                         nextNode.g = current.g;
                         if (dir[1] != 0 && dir[0] != 0)
                             nextNode.g += 1.4f;
                         else
                             nextNode.g += 1f;
-
-                        nextNode.h = getDistanceFormula(nextPosition, endPos);
+                        nextNode.h = getDistanceFormula(nextNode.pos, endPos);
                         nextNode.f = nextNode.g + nextNode.h;
                         // g, h, f 값을 초기화
 
-                        if (find(closeList, nextPosition) == null)
+                        if (isPosInNode(closeList, nextNode.pos) == null)
                         {
                             // closelist에 nextPosition에 해당하는 좌표가 있는지, 즉 해당 좌표의 정보를 가지고 있는지 판단한다. 있으면, 두 번 방문 x
-                            Node n = find(openList, nextPosition); // 없다면, openlist에 있는지 확인한다.
+                            Node n = isPosInNode(openList, nextNode.pos); // 없다면, openlist에 있는지 확인한다
                             if (n != null)
                             {
                                 if (n.f > nextNode.f)
@@ -183,11 +199,12 @@ public class AstarController : MonoBehaviour
                                     n.g = nextNode.g;
                                     n.h = nextNode.h;
                                     current.nextNode = n;
-                                    continue;
                                 }
                             }
-
-                            openList.Add(nextNode); // 해당 사항이 없으면 추가
+                            else
+                            {
+                                openList.Add(nextNode); // 해당 사항이 없으면 추가
+                            }
                         }
                     }
                 }

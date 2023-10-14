@@ -5,8 +5,8 @@ using UnityEngine.Tilemaps;
 
 public class TilemapController : MonoBehaviour
 {
-    public Vector3Int playerStartPos;
-    public Vector3Int endPos;
+    public Vector3 playerStartPos;
+    public Vector3 endPos;
     
     [SerializeField] private TileBase wallTile;
     [SerializeField] private TileBase goalTile;
@@ -20,10 +20,10 @@ public class TilemapController : MonoBehaviour
             {
                 if (Random.Range(0, 3) == 0)
                 {
-                    Vector3Int wallPos = new Vector3Int(x, y, 0);
+                    Vector3 wallPos = new Vector3(x + 0.5f, y + 0.5f, 0);
 
                     if (wallPos != playerStartPos && wallPos != endPos)
-                        this.GetComponent<Tilemap>().SetTile(wallPos, wallTile);
+                        this.GetComponent<Tilemap>().SetTile(new Vector3Int(x, y, 0), wallTile);
                 } 
             }
         }    
@@ -31,16 +31,16 @@ public class TilemapController : MonoBehaviour
 
     void Start()
     {
-        int playerStartPosX = Random.Range(-6, -1);
-        int playerStartPosY = Random.Range(-4, 4);
-        int endPosX = Random.Range(1, 6);
-        int endPosY = Random.Range(-4, 4);
+        float playerStartPosX = Random.Range(-6, -1) + 0.5f;
+        float playerStartPosY = Random.Range(-4, 4) + 0.5f;
+        float endPosX = Random.Range(1, 6) + 0.5f;
+        float endPosY = Random.Range(-4, 4) + 0.5f;
 
-        playerStartPos = new Vector3Int(playerStartPosX, playerStartPosY, 0);
-        player = Instantiate(player, new Vector3(playerStartPosX + 0.5f, playerStartPosY + 0.5f, 0),
+        playerStartPos = new Vector3(playerStartPosX, playerStartPosY, 0);
+        player = Instantiate(player, new Vector3(playerStartPosX, playerStartPosY, 0),
             UnityEngine.Quaternion.identity);
-        endPos = new Vector3Int(endPosX, endPosY, 0);
-        this.GetComponent<Tilemap>().SetTile(endPos, goalTile);
+        endPos = new Vector3(endPosX, endPosY, 0);
+        this.GetComponent<Tilemap>().SetTile(new Vector3Int((int)(endPos.x - 0.5f), (int)(endPos.y - 0.5f), 0), goalTile);
 
         makeWall();
     }
