@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 class Node
 {
@@ -25,44 +26,32 @@ class Node
     }
 }
 
-public class PlayerController : MonoBehaviour
+public class AstarController : MonoBehaviour
 {
-    private Vector3 destination;
-    private Camera cam;
-    private bool isMove = false;
+    private Vector3Int destinationPos;
+    private Vector3 startPos;
 
-    [SerializeField] private GameObject walkTile;
+    private GameObject player;
+
+    [SerializeField] private TileBase wallTile;
+    [SerializeField] private TileBase walkTile;
+    [SerializeField] private Tilemap tilemap;
+    
 
     void Start()
     {
-        cam = Camera.main;
+        TilemapController tileController;
+        tileController = tilemap.GetComponent<TilemapController>();
+        
+        player = GameObject.Find("Player(Clone)");
+        startPos = tileController.playerStartPos;
+        destinationPos = tileController.endPos;
     }
 
-    // Update is called once per frame
-    void Update()
+    public void onClick()
     {
-        if (Input.GetMouseButtonDown(0) && !isMove)
-        {
-            float desX = (int)cam.ScreenToWorldPoint(Input.mousePosition).x;
-            float desY = (int)cam.ScreenToWorldPoint(Input.mousePosition).y;
-            
-            desX = (desX < 0) ? desX - 0.5f : desX + 0.5f;
-            desY = (desY < 0) ? desY - 0.5f : desY + 0.5f;
-
-            if (desX == 0.5f && cam.ScreenToWorldPoint(Input.mousePosition).x < 0)
-                desX = -desX;
-            
-            if (desY == 0.5f && cam.ScreenToWorldPoint(Input.mousePosition).y < 0)
-                desY = -desY;
-            
-            destination = new Vector3(desX, desY, 0);
-
-            if ((destination.x >= -5.5f && destination.x <= 5.5f) && (destination.y >= -2.5f && destination.y <= 2.5f))
-            {
-                isMove = true;
-                Astar(transform.position, destination);
-            }
-        }
+        Start();
+        Astar(new Vector3(startPos.x + 0.5f, startPos.y + 0.5f, 0), destinationPos);
     }
     
     float getDistanceFormula(Vector3 xy1, Vector3 xy2)
@@ -89,31 +78,29 @@ public class PlayerController : MonoBehaviour
     
     void makePath(List<Node> closeList)
     {
+        Debug.Log("Make start");
+        
         List<Vector3> path = new List<Vector3>();
         closeList.Reverse();
         Node node = closeList[0];
-
-        while (node.parent != null)
+    
+        while (node != null)
         {
             path.Add(new Vector3(node.pos.x, node.pos.y, 0));
             node = node.parent;
         }
         
-        GameObject walk = Instantiate(walkTile, transform.parent);
-        walk.transform.position = transform.position;
         path.Reverse();
         foreach (Vector3 pos in path)
         {
-            transform.Translate(pos - transform.position);
-            walk = Instantiate(walkTile, transform.parent);
-            walk.transform.position = pos;
-
+            Debug.Log(pos.x + ", " + pos.y);
+            tilemap.SetTile(new Vector3Int((int)(pos.x - 0.5f), (int)(pos.y - 0.5f), 0), walkTile);
+            player.transform.Translate(pos - player.transform.position);
         }
     } // 도착지에 도착 후, 어떤 경로로 도착했는지 부모 노드를 쫓아간다.
 
     void Astar(Vector3 startPos, Vector3 endPos)
     {
-        Debug.Log("Astar start");
         List<List<int>> wasd = new List<List<int>>()
         {
             new List<int> { 0, 1 }, //상
@@ -125,6 +112,7 @@ public class PlayerController : MonoBehaviour
             new List<int> {-1, -1}, //왼쪽 아래
             new List<int> {1, -1}   //오른쪽 아래
         }; // 상하좌우 대각선을 검사해주기 위한 리스트
+        
         List<Node> openList = new List<Node>();
         List<Node> closeList = new List<Node>();
         
@@ -155,56 +143,57 @@ public class PlayerController : MonoBehaviour
             openList.RemoveAt(minIndex);
             closeList.Add(current);
             
-            if (current.pos.x == endPos.x && current.pos.y == endPos.y) // 만약 현재 그리드 좌표가 도착지 좌표라면 종료
+            if (current.pos.x == endPos.x + 0.5f && current.pos.y == endPos.y + 0.5f) // 만약 현재 그리드 좌표가 도착지 좌표라면 종료
                 break;
 
             foreach (List<int> dir in wasd)
             {
                 Vector3 nextPosition =
                     new Vector3(current.pos.x + dir[0], current.pos.y + dir[1], 0);
-
+                
                 if ((nextPosition.x >= -5.5f && nextPosition.x <= 5.5f) &&
-                    (nextPosition.y >= -2.5f && nextPosition.y <= 2.5f))
+                    (nextPosition.y >= -3.5f && nextPosition.y <= 3.5f))
                 {
+                    if (tilemap.GetTile(new Vector3Int((int)(nextPosition.x - 0.5f), (int)(nextPosition.y - 0.5f), 0)) != wallTile) {
+                        Node nextNode = new Node(current, null, nextPosition);
+                        current.nextNode = nextNode;
 
-                    Node nextNode = new Node(current, null, nextPosition);
-                    current.nextNode = nextNode;
+                        nextNode.g = current.g;
+                        if (dir[1] != 0 && dir[0] != 0)
+                            nextNode.g += 1.4f;
+                        else
+                            nextNode.g += 1f;
 
-                    nextNode.g = current.g;
-                    if (dir[1] != 0 && dir[0] != 0)
-                        nextNode.g += 1.4f;
-                    else
-                        nextNode.g += 1f;
+                        nextNode.h = getDistanceFormula(nextPosition, endPos);
+                        nextNode.f = nextNode.g + nextNode.h;
+                        // g, h, f 값을 초기화
 
-                    nextNode.h = getDistanceFormula(nextPosition, endPos);
-                    nextNode.f = nextNode.g + nextNode.h;
-                    // g, h, f 값을 초기화
-
-                    if (find(closeList, nextPosition) == null)
-                    {
-                        // closelist에 nextPosition에 해당하는 좌표가 있는지, 즉 해당 좌표의 정보를 가지고 있는지 판단한다. 있으면, 두 번 방문 x
-                        Node n = find(openList, nextPosition); // 없다면, openlist에 있는지 확인한다.
-                        if (n != null)
+                        if (find(closeList, nextPosition) == null)
                         {
-                            if (n.f > nextNode.f)
+                            // closelist에 nextPosition에 해당하는 좌표가 있는지, 즉 해당 좌표의 정보를 가지고 있는지 판단한다. 있으면, 두 번 방문 x
+                            Node n = find(openList, nextPosition); // 없다면, openlist에 있는지 확인한다.
+                            if (n != null)
                             {
-                                // 새로 구한 그리드가 openlist에 있을 경우에 f 값을 보고 더 작은 그리드 정보로 바꾸어준다. 그래야 해당 부모 경로를 거치는 최단경로가 만들어질 수 있다.
-                                n.parent = current;
-                                n.nextNode = null;
-                                n.f = nextNode.f;
-                                n.g = nextNode.g;
-                                n.h = nextNode.h;
-                                current.nextNode = n;
-                                continue;
+                                if (n.f > nextNode.f)
+                                {
+                                    // 새로 구한 그리드가 openlist에 있을 경우에 f 값을 보고 더 작은 그리드 정보로 바꾸어준다. 그래야 해당 부모 경로를 거치는 최단경로가 만들어질 수 있다.
+                                    n.parent = current;
+                                    n.nextNode = null;
+                                    n.f = nextNode.f;
+                                    n.g = nextNode.g;
+                                    n.h = nextNode.h;
+                                    current.nextNode = n;
+                                    continue;
+                                }
                             }
+
+                            openList.Add(nextNode); // 해당 사항이 없으면 추가
                         }
-                        openList.Add(nextNode); // 해당 사항이 없으면 추가
                     }
                 }
             }
         }
         
         makePath(closeList);
-        isMove = false;
     }
 }
